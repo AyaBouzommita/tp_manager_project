@@ -1,83 +1,81 @@
 <?php
-session_start();
+require_once '../includes/session_manager.php';
+require_once '../includes/db.php';
 
 // Vérifier si l'utilisateur est connecté
-if (!isset($_SESSION['prof_id'])) {
-    header("Location: login.php");
-    exit();
+checkUserSession();
+
+// Récupérer toutes les séances
+$stmt = $conn->prepare("SELECT id, date FROM seances ORDER BY date DESC");
+$stmt->execute();
+$seances = $stmt->get_result();
+
+// Traitement de la soumission du formulaire
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (isset($_POST['calculer'])) {
+        // Logique pour calculer les notes totales
+        foreach ($_POST['notes'] as $etudiantId => $notes) {
+            $noteTotal = 0;
+            foreach ($notes as $note) {
+                $noteTotal += !empty($note) ? floatval($note) : 0;
+            }
+            $_POST['notes'][$etudiantId]['note_totale'] = $noteTotal;
+        }
+    } elseif (isset($_POST['enregistrer'])) {
+        // Enregistrement des notes
+        $stmt = $conn->prepare("INSERT INTO notes (etudiant_id, seance_id, travail, compte_rendu, taches_terminees, discipline, note_totale) 
+                              VALUES (?, ?, ?, ?, ?, ?, ?) 
+                              ON DUPLICATE KEY UPDATE 
+                              travail = VALUES(travail),
+                              compte_rendu = VALUES(compte_rendu),
+                              taches_terminees = VALUES(taches_terminees),
+                              discipline = VALUES(discipline),
+                              note_totale = VALUES(note_totale)");
+
+        foreach ($_POST['notes'] as $etudiantId => $notes) {
+            $travail = !empty($notes['travail']) ? floatval($notes['travail']) : 0;
+            $compteRendu = !empty($notes['compte_rendu']) ? floatval($notes['compte_rendu']) : 0;
+            $tachesTerminees = !empty($notes['taches_terminees']) ? floatval($notes['taches_terminees']) : 0;
+            $discipline = !empty($notes['discipline']) ? floatval($notes['discipline']) : 0;
+            $noteTotal = $travail + $compteRendu + $tachesTerminees + $discipline;
+
+            $stmt->bind_param("iiiiiii", 
+                $etudiantId, 
+                $_POST['seance_id'],
+                $travail,
+                $compteRendu,
+                $tachesTerminees,
+                $discipline,
+                $noteTotal
+            );
+            $stmt->execute();
+        }
+        setFlashMessage('success', "Les notes ont été enregistrées avec succès.");
+        header("Location: gestion_notes.php");
+        exit();
+    }
 }
 
-require '../includes/db.php';  // Connexion à la base de données
-
-// Variables pour les notes
-$etudiants_notes = []; // Stocker les données soumises pour réaffichage
-$notes_totales = []; // Stocker les notes totales calculées
-
-// Récupérer la liste des séances disponibles
-$result_seances = $conn->query("SELECT * FROM seances");
-$seances = $result_seances->fetch_all(MYSQLI_ASSOC);
-
-// Récupérer les étudiants pour la séance sélectionnée
+// Récupérer les étudiants et leurs notes pour une séance sélectionnée
+$selectedSeanceId = isset($_POST['seance_id']) ? $_POST['seance_id'] : null;
 $etudiants = [];
-if (isset($_GET['seance_id']) || isset($_POST['seance_id'])) {
-    $seance_id = isset($_GET['seance_id']) ? $_GET['seance_id'] : $_POST['seance_id'];
+$notes = [];
 
-    // Récupérer les étudiants associés à la séance
-    $stmt = $conn->prepare("
-        SELECT e.id, e.nom, e.prenom 
-        FROM etudiants e
-        INNER JOIN groupes g ON e.groupe_id = g.id
-        INNER JOIN seances s ON s.groupe_id = g.id
-        WHERE s.id = ?
-    ");
-    $stmt->bind_param("i", $seance_id);
+if ($selectedSeanceId) {
+    // Récupérer tous les étudiants
+    $stmt = $conn->prepare("SELECT id, nom, prenom FROM etudiants ORDER BY nom, prenom");
     $stmt->execute();
-    $result = $stmt->get_result();
-    $etudiants = $result->fetch_all(MYSQLI_ASSOC);
-}
+    $etudiants = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 
-// Si le bouton "Calculer les notes totales" est cliqué
-if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['calculer_notes'])) {
-    $etudiants_notes = $_POST['note']; // Stocker les données soumises pour réaffichage
-
-    // Calcul des notes totales
-    foreach ($etudiants_notes as $etudiant_id => $notes) {
-        $travail = isset($notes['travail']) ? (float)$notes['travail'] : 0;
-        $compte_rendu = isset($notes['compte_rendu']) ? (float)$notes['compte_rendu'] : 0;
-        $taches_terminees = isset($notes['taches_terminees']) ? (float)$notes['taches_terminees'] : 0;
-        $discipline = isset($notes['discipline']) ? (float)$notes['discipline'] : 0;
-
-        $notes_totales[$etudiant_id] = $travail + $compte_rendu + $taches_terminees + $discipline;
+    // Récupérer les notes existantes pour cette séance
+    $stmt = $conn->prepare("SELECT * FROM notes WHERE seance_id = ?");
+    $stmt->bind_param("i", $selectedSeanceId);
+    $stmt->execute();
+    $notesResult = $stmt->get_result();
+    
+    while ($note = $notesResult->fetch_assoc()) {
+        $notes[$note['etudiant_id']] = $note;
     }
-}
-
-// Si le bouton "Enregistrer les notes" est cliqué
-if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['enregistrer_notes'])) {
-    $etudiants_notes = $_POST['note']; // Stocker les données soumises pour réaffichage
-
-    foreach ($etudiants_notes as $etudiant_id => $notes) {
-        $travail = isset($notes['travail']) ? (float)$notes['travail'] : 0;
-        $compte_rendu = isset($notes['compte_rendu']) ? (float)$notes['compte_rendu'] : 0;
-        $taches_terminees = isset($notes['taches_terminees']) ? (float)$notes['taches_terminees'] : 0;
-        $discipline = isset($notes['discipline']) ? (float)$notes['discipline'] : 0;
-
-        $note_totale = $travail + $compte_rendu + $taches_terminees + $discipline;
-
-        // Insérer ou mettre à jour les notes dans la base de données
-        $stmt = $conn->prepare("
-            INSERT INTO notes (etudiant_id, seance_id, travail, compte_rendu, taches_terminees, discipline, note_totale) 
-            VALUES (?, ?, ?, ?, ?, ?, ?) 
-            ON DUPLICATE KEY UPDATE 
-            travail = VALUES(travail), 
-            compte_rendu = VALUES(compte_rendu), 
-            taches_terminees = VALUES(taches_terminees), 
-            discipline = VALUES(discipline), 
-            note_totale = VALUES(note_totale)
-        ");
-        $stmt->bind_param("iiddddi", $etudiant_id, $seance_id, $travail, $compte_rendu, $taches_terminees, $discipline, $note_totale);
-        $stmt->execute();
-    }
-    $success_message = "Notes enregistrées avec succès.";
 }
 ?>
 
@@ -86,87 +84,134 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['enregistrer_notes'])) 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gestion des Notes</title>
-    <link rel="stylesheet" href="../assets/css/style.css">  <!-- Lien vers le fichier CSS -->
+    <title>Gestion des Notes - TP Manager</title>
+    <link rel="stylesheet" href="../assets/css/gestion_notes.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
 <body>
-    <div class="gestion-notes-container">
-        <h2>Gestion des Notes</h2>
+    <div class="notes-container">
+        <div class="notes-header">
+            <h1><i class="fas fa-graduation-cap"></i> Gestion des Notes</h1>
+            
+            <?php 
+            $flashMessage = getFlashMessage();
+            if ($flashMessage): 
+            ?>
+                <div class="alert alert-<?= $flashMessage['type'] ?>">
+                    <i class="fas fa-check-circle"></i>
+                    <?= htmlspecialchars($flashMessage['message']) ?>
+                </div>
+            <?php endif; ?>
+        </div>
 
-        <!-- Messages de succès ou d'erreur -->
-        <?php if (isset($success_message)): ?>
-            <p style="color: green;"><?= $success_message; ?></p>
-        <?php endif; ?>
-
-        <!-- Sélection de la séance -->
-        <h3>Sélectionner une séance</h3>
-        <form method="GET">
-            <div>
-                <label for="seance_id">Séance :</label>
-                <select name="seance_id" id="seance_id" required>
-                    <option value="">Sélectionner une séance</option>
-                    <?php foreach ($seances as $seance): ?>
-                        <option value="<?= $seance['id']; ?>" <?= isset($seance_id) && $seance_id == $seance['id'] ? 'selected' : ''; ?>>
-                            <?= htmlspecialchars($seance['date']); ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
-                <button type="submit">Sélectionner</button>
-            </div>
+        <form method="POST" class="seance-selector">
+            <label for="seance_id">
+                <i class="fas fa-calendar"></i> Sélectionner une séance :
+            </label>
+            <select name="seance_id" id="seance_id">
+                <option value="">Choisir une séance</option>
+                <?php while ($seance = $seances->fetch_assoc()): ?>
+                    <option value="<?= $seance['id'] ?>" <?= ($selectedSeanceId == $seance['id']) ? 'selected' : '' ?>>
+                        <?= htmlspecialchars(date('d/m/Y', strtotime($seance['date']))) ?>
+                    </option>
+                <?php endwhile; ?>
+            </select>
+            <button type="submit" class="btn-select">
+                <i class="fas fa-check"></i> Sélectionner
+            </button>
         </form>
 
-        <!-- Formulaire pour gérer les notes -->
-        <?php if (!empty($etudiants)): ?>
-            <h3>Attribuer les notes pour la séance</h3>
-            <form method="POST">
-                <input type="hidden" name="seance_id" value="<?= $seance_id; ?>">
-                <table>
+        <?php if ($selectedSeanceId && !empty($etudiants)): ?>
+            <form method="POST" id="notesForm">
+                <input type="hidden" name="seance_id" value="<?= $selectedSeanceId ?>">
+                
+                <table class="notes-table">
                     <thead>
                         <tr>
                             <th>Nom</th>
                             <th>Prénom</th>
-                            <th>Travail</th>
-                            <th>Compte Rendu</th>
-                            <th>Tâches Terminées</th>
-                            <th>Discipline</th>
-                            <th>Note Totale</th>
+                            <th>Travail <small>(5 pts)</small></th>
+                            <th>Compte Rendu <small>(5 pts)</small></th>
+                            <th>Tâches Terminées <small>(5 pts)</small></th>
+                            <th>Discipline <small>(5 pts)</small></th>
+                            <th>Note Totale <small>(20 pts)</small></th>
                         </tr>
                     </thead>
                     <tbody>
                         <?php foreach ($etudiants as $etudiant): ?>
                             <tr>
-                                <td><?= htmlspecialchars($etudiant['nom']); ?></td>
-                                <td><?= htmlspecialchars($etudiant['prenom']); ?></td>
+                                <td><?= htmlspecialchars($etudiant['nom']) ?></td>
+                                <td><?= htmlspecialchars($etudiant['prenom']) ?></td>
                                 <td>
-                                    <input type="number" name="note[<?= $etudiant['id']; ?>][travail]" min="0" max="5" step="0.1" 
-                                    value="<?= $etudiants_notes[$etudiant['id']]['travail'] ?? ''; ?>" required>
+                                    <input type="number" min="0" max="5" step="0.5" 
+                                           name="notes[<?= $etudiant['id'] ?>][travail]"
+                                           value="<?= isset($notes[$etudiant['id']]) ? $notes[$etudiant['id']]['travail'] : '' ?>">
                                 </td>
                                 <td>
-                                    <input type="number" name="note[<?= $etudiant['id']; ?>][compte_rendu]" min="0" max="5" step="0.1" 
-                                    value="<?= $etudiants_notes[$etudiant['id']]['compte_rendu'] ?? ''; ?>" required>
+                                    <input type="number" min="0" max="5" step="0.5" 
+                                           name="notes[<?= $etudiant['id'] ?>][compte_rendu]"
+                                           value="<?= isset($notes[$etudiant['id']]) ? $notes[$etudiant['id']]['compte_rendu'] : '' ?>">
                                 </td>
                                 <td>
-                                    <input type="number" name="note[<?= $etudiant['id']; ?>][taches_terminees]" min="0" max="5" step="0.1" 
-                                    value="<?= $etudiants_notes[$etudiant['id']]['taches_terminees'] ?? ''; ?>" required>
+                                    <input type="number" min="0" max="5" step="0.5" 
+                                           name="notes[<?= $etudiant['id'] ?>][taches_terminees]"
+                                           value="<?= isset($notes[$etudiant['id']]) ? $notes[$etudiant['id']]['taches_terminees'] : '' ?>">
                                 </td>
                                 <td>
-                                    <input type="number" name="note[<?= $etudiant['id']; ?>][discipline]" min="0" max="5" step="0.1" 
-                                    value="<?= $etudiants_notes[$etudiant['id']]['discipline'] ?? ''; ?>" required>
+                                    <input type="number" min="0" max="5" step="0.5" 
+                                           name="notes[<?= $etudiant['id'] ?>][discipline]"
+                                           value="<?= isset($notes[$etudiant['id']]) ? $notes[$etudiant['id']]['discipline'] : '' ?>">
                                 </td>
-                                <td>
-                                    <?= $notes_totales[$etudiant['id']] ?? '—'; ?>
+                                <td class="note-totale">
+                                    <?= isset($notes[$etudiant['id']]) ? $notes[$etudiant['id']]['note_totale'] : '0' ?>
                                 </td>
                             </tr>
                         <?php endforeach; ?>
                     </tbody>
                 </table>
-                <button type="submit" name="calculer_notes">Calculer les notes totales</button>
-                <button type="submit" name="enregistrer_notes">Enregistrer les notes</button>
-            </form>
-        <?php endif; ?>
 
-        <a href="dashboard.php">Retour au tableau de bord</a>
+                <div class="action-buttons">
+                    <button type="submit" name="calculer" class="btn btn-calculate">
+                        <i class="fas fa-calculator"></i> Calculer les notes totales
+                    </button>
+                    <button type="submit" name="enregistrer" class="btn btn-save">
+                        <i class="fas fa-save"></i> Enregistrer les notes
+                    </button>
+                    <a href="dashboard.php" class="btn btn-return">
+                        <i class="fas fa-arrow-left"></i> Retour au tableau de bord
+                    </a>
+                </div>
+            </form>
+        <?php elseif ($selectedSeanceId): ?>
+            <div class="alert alert-error">
+                <i class="fas fa-exclamation-circle"></i>
+                Aucun étudiant trouvé pour cette séance.
+            </div>
+        <?php endif; ?>
     </div>
-    
+
+    <script>
+        // Calcul automatique des notes totales
+        document.querySelectorAll('input[type="number"]').forEach(input => {
+            input.addEventListener('input', function() {
+                const row = this.closest('tr');
+                const inputs = row.querySelectorAll('input[type="number"]');
+                let total = 0;
+                
+                inputs.forEach(input => {
+                    total += Number(input.value) || 0;
+                });
+                
+                row.querySelector('.note-totale').textContent = total.toFixed(1);
+            });
+        });
+
+        // Animation de chargement lors de la soumission
+        document.querySelectorAll('form').forEach(form => {
+            form.addEventListener('submit', function() {
+                this.classList.add('loading');
+            });
+        });
+    </script>
 </body>
 </html>

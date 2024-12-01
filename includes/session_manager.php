@@ -1,41 +1,45 @@
 <?php
-function initSession() {
-    if (session_status() === PHP_SESSION_NONE) {
-        session_start();
+session_start();
+
+function checkUserSession() {
+    if (!isset($_SESSION['prof_id'])) {
+        header("Location: login.php");
+        exit();
     }
 }
 
-function isLoggedIn() {
-    initSession();
+function getUserId() {
+    return $_SESSION['prof_id'] ?? null;
+}
+
+function isUserLoggedIn() {
     return isset($_SESSION['prof_id']);
 }
 
-function getProfesseurInfo() {
-    initSession();
-    return [
-        'nom' => $_SESSION['prof_nom'] ?? '',
-        'prenom' => $_SESSION['prof_prenom'] ?? '',
-        'id' => $_SESSION['prof_id'] ?? null
+function logoutUser() {
+    session_unset();
+    session_destroy();
+    header("Location: login.php");
+    exit();
+}
+
+function setUserSession($userId) {
+    $_SESSION['prof_id'] = $userId;
+}
+
+function setFlashMessage($type, $message) {
+    $_SESSION['flash_message'] = [
+        'type' => $type,
+        'message' => $message
     ];
 }
 
-function setUserSession($prof) {
-    initSession();
-    $_SESSION['prof_id'] = $prof['id'];
-    $_SESSION['prof_nom'] = $prof['nom'];
-    $_SESSION['prof_prenom'] = $prof['prenom'];
-}
-
-function clearSession() {
-    initSession();
-    session_unset();
-    session_destroy();
-}
-
-function requireLogin() {
-    if (!isLoggedIn()) {
-        header('Location: /tp_manager_project/pages/login.php');
-        exit();
+function getFlashMessage() {
+    if (isset($_SESSION['flash_message'])) {
+        $message = $_SESSION['flash_message'];
+        unset($_SESSION['flash_message']);
+        return $message;
     }
+    return null;
 }
 ?>

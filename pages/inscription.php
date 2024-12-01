@@ -47,45 +47,63 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Inscription - Gestion des TP</title>
-    <link rel="stylesheet" href="../assets/css/style.css">  <!-- Lien vers le fichier CSS -->
+    <link rel="stylesheet" href="../assets/css/inscription.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
 <body>
     <div class="signup-container">
-        <h2>Créer un compte</h2>
+        <h2><i class="fas fa-user-plus"></i> Créer un compte</h2>
 
-        <!-- Affichage des erreurs s'il y en a -->
         <?php if (isset($error)): ?>
-            <p style="color: red;"><?= $error; ?></p>
+            <div class="error-message">
+                <i class="fas fa-exclamation-circle"></i>
+                <?= htmlspecialchars($error); ?>
+            </div>
         <?php endif; ?>
 
-        <!-- Formulaire d'inscription -->
-        <form method="POST">
-            <div>
-                <label for="nom">Nom :</label>
-                <input type="text" name="nom" id="nom" required placeholder="Entrez votre nom" />
+        <form method="POST" autocomplete="off">
+            <div class="form-group">
+                <label for="nom">
+                    <i class="fas fa-user"></i> Nom
+                </label>
+                <input type="text" name="nom" id="nom" required 
+                       placeholder="Entrez votre nom"
+                       value="<?= isset($_POST['nom']) ? htmlspecialchars($_POST['nom']) : '' ?>">
             </div>
 
-            <div>
-                <label for="email">Email :</label>
-                <input type="email" name="email" id="email" required placeholder="Entrez votre email" />
+            <div class="form-group">
+                <label for="email">
+                    <i class="fas fa-envelope"></i> Email
+                </label>
+                <input type="email" name="email" id="email" required 
+                       placeholder="Entrez votre email"
+                       value="<?= isset($_POST['email']) ? htmlspecialchars($_POST['email']) : '' ?>">
             </div>
 
-            <div>
-                <label for="password">Mot de passe :</label>
-                <input type="password" name="password" id="password" required placeholder="Entrez votre mot de passe" />
+            <div class="form-group">
+                <label for="password">
+                    <i class="fas fa-lock"></i> Mot de passe
+                </label>
+                <input type="password" name="password" id="password" required 
+                       placeholder="Entrez votre mot de passe">
             </div>
 
-            <div>
-                <label for="confirm_password">Confirmer le mot de passe :</label>
-                <input type="password" name="confirm_password" id="confirm_password" required placeholder="Confirmez votre mot de passe" />
+            <div class="form-group">
+                <label for="confirm_password">
+                    <i class="fas fa-lock"></i> Confirmer le mot de passe
+                </label>
+                <input type="password" name="confirm_password" id="confirm_password" required 
+                       placeholder="Confirmez votre mot de passe">
             </div>
 
-            <button type="submit">S'inscrire</button>
+            <button type="submit">
+                <i class="fas fa-user-plus"></i> S'inscrire
+            </button>
         </form>
 
-        <p>Déjà un compte ? <a href="login.php">Se connecter</a></p>
+        <div class="login-link">
+            Déjà un compte ? <a href="login.php"><i class="fas fa-sign-in-alt"></i> Se connecter</a>
+        </div>
     </div>
-
-    <script src="../assets/js/script.js"></script>  <!-- Lien vers le fichier JS -->
 </body>
 </html>
