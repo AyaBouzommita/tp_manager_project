@@ -8,6 +8,17 @@ function getAllGroupes() {
     return $result ? $result->fetch_all(MYSQLI_ASSOC) : [];
 }
 
+function searchGroupes($searchTerm) {
+    global $conn;
+    $searchTerm = '%' . $conn->real_escape_string($searchTerm) . '%';
+    $query = "SELECT * FROM groupes WHERE nom LIKE ? ORDER BY nom ASC";
+    $stmt = $conn->prepare($query);
+    $stmt->bind_param("s", $searchTerm);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    return $result->fetch_all(MYSQLI_ASSOC);
+}
+
 function addGroupe($nom) {
     global $conn;
     $nom = $conn->real_escape_string($nom);

@@ -9,8 +9,11 @@ if (!isset($_SESSION['prof_id'])) {
     exit();
 }
 
-// Récupérer tous les groupes
-$groupes = getAllGroupes();
+// Récupérer le terme de recherche
+$searchTerm = isset($_GET['search']) ? trim($_GET['search']) : '';
+
+// Récupérer les groupes (filtrés ou tous)
+$groupes = !empty($searchTerm) ? searchGroupes($searchTerm) : getAllGroupes();
 ?>
 
 <!DOCTYPE html>
@@ -20,6 +23,21 @@ $groupes = getAllGroupes();
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gestion des Groupes</title>
     <?php include '../includes/header.php'; ?>
+    <style>
+        .search-container {
+            margin-bottom: 2rem;
+        }
+        .search-container .input-group {
+            max-width: 500px;
+        }
+        .card {
+            transition: transform 0.2s;
+        }
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+    </style>
 </head>
 <body class="d-flex flex-column min-vh-100">
     <div class="container mt-5 pt-4">
@@ -28,6 +46,24 @@ $groupes = getAllGroupes();
             <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addGroupeModal">
                 <i class="fas fa-plus"></i> Nouveau Groupe
             </button>
+        </div>
+
+        <!-- Barre de recherche -->
+        <div class="search-container">
+            <form action="" method="GET" class="mb-4">
+                <div class="input-group">
+                    <input type="text" class="form-control" placeholder="Rechercher un groupe..." 
+                           name="search" value="<?php echo htmlspecialchars($searchTerm); ?>">
+                    <button class="btn btn-primary" type="submit">
+                        <i class="fas fa-search"></i>
+                    </button>
+                    <?php if (!empty($searchTerm)): ?>
+                        <a href="?" class="btn btn-secondary">
+                            <i class="fas fa-times"></i> Réinitialiser
+                        </a>
+                    <?php endif; ?>
+                </div>
+            </form>
         </div>
 
         <?php if (isset($_SESSION['success'])): ?>
@@ -47,6 +83,12 @@ $groupes = getAllGroupes();
                 unset($_SESSION['error']);
                 ?>
                 <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        <?php endif; ?>
+
+        <?php if (empty($groupes) && !empty($searchTerm)): ?>
+            <div class="alert alert-info">
+                Aucun groupe trouvé pour "<?php echo htmlspecialchars($searchTerm); ?>"
             </div>
         <?php endif; ?>
 
