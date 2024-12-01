@@ -3,230 +3,150 @@ session_start();
 
 // Vérifier si l'utilisateur est connecté
 if (!isset($_SESSION['prof_id'])) {
+    // Si l'utilisateur n'est pas connecté, rediriger vers la page de connexion
     header("Location: login.php");
     exit();
 }
 
-require '../includes/db.php';
+require '../includes/db.php';  // Connexion à la base de données
 
-// Récupérer les séances avec les informations de présence
-$query = "SELECT s.*, g.nom as nom_groupe,
-          (SELECT COUNT(*) FROM presences p WHERE p.seance_id = s.id AND p.presence = 1) as presents_count,
-          (SELECT COUNT(*) FROM presences p WHERE p.seance_id = s.id AND p.presence = 0) as absents_count
-          FROM seances s 
-          LEFT JOIN groupes g ON s.groupe_id = g.id 
-          ORDER BY s.date DESC";
-$result = $conn->query($query);
-$seances = $result->fetch_all(MYSQLI_ASSOC);
+// Vérification de la soumission du formulaire de présence
+if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['marquer_presence'])) {
+    $seance_id = $_POST['seance_id'];
+    
+    // Vérifier si l'array 'absence' existe et s'il contient des données
+    if (isset($_POST['absence']) && !empty($_POST['absence'])) {
+        // Parcourir les étudiants et marquer leur absence
+        foreach ($_POST['absence'] as $etudiant_id => $absence) {
+            // Marquer l'étudiant comme absent (absence = 1)
+            $stmt = $conn->prepare("INSERT INTO presences (etudiant_id, seance_id, presence) 
+                VALUES (?, ?, ?) 
+                ON DUPLICATE KEY UPDATE presence = ?");
+            $stmt->bind_param("iiii", $etudiant_id, $seance_id, $absence, $absence);
+            $stmt->execute();
+        }
+        $success_message = "Absences enregistrées avec succès.";
+    } else {
+        $error_message = "Aucune absence n'a été marquée.";
+    }
+}
 
-// Récupérer la liste des groupes pour le filtre
-$query_groupes = "SELECT id, nom FROM groupes ORDER BY nom";
-$result_groupes = $conn->query($query_groupes);
-$groupes = $result_groupes->fetch_all(MYSQLI_ASSOC);
+// Récupérer la liste des séances disponibles
+$result_seances = $conn->query("SELECT * FROM seances");
+$seances = $result_seances->fetch_all(MYSQLI_ASSOC);
+
+// Récupérer les étudiants pour la séance sélectionnée
+$etudiants = [];
+$absences_count = [];
+if (isset($_GET['seance_id'])) {
+    $seance_id = $_GET['seance_id'];
+    
+    // Récupérer les étudiants associés à la séance
+    $stmt = $conn->prepare("SELECT e.id, e.nom, e.prenom FROM etudiants e
+                            INNER JOIN groupes g ON e.groupe_id = g.id
+                            INNER JOIN seances s ON s.groupe_id = g.id
+                            WHERE s.id = ?");
+    $stmt->bind_param("i", $seance_id);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $etudiants = $result->fetch_all(MYSQLI_ASSOC);
+    
+    // Calculer le nombre total d'absences pour chaque étudiant pour toutes les séances
+    foreach ($etudiants as $etudiant) {
+        $etudiant_id = $etudiant['id'];
+        
+        // Compter le nombre total d'absences de cet étudiant dans toutes les séances
+        $absence_stmt = $conn->prepare("SELECT COUNT(*) AS absences_count 
+                                       FROM presences 
+                                       WHERE etudiant_id = ? AND presence = 0");
+        $absence_stmt->bind_param("i", $etudiant_id);
+        $absence_stmt->execute();
+        $absence_result = $absence_stmt->get_result();
+        $absence_row = $absence_result->fetch_assoc();
+        $absences_count[$etudiant_id] = $absence_row['absences_count'];
+    }
+}
 ?>
 
 <!DOCTYPE html>
 <html lang="fr">
 <head>
+<!-- <?php include '../includes/header.php'; ?> -->
+
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gestion des Présences - TP Manager</title>
-    <!-- Bootstrap CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- Font Awesome -->
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <!-- DataTables CSS -->
-    <link href="https://cdn.datatables.net/1.11.5/css/dataTables.bootstrap5.min.css" rel="stylesheet">
-    <style>
-        .presence-header {
-            background: linear-gradient(135deg, #0072ff 0%, #00c6ff 100%);
-            color: white;
-            padding: 2rem 0;
-            margin-bottom: 2rem;
-            border-radius: 0 0 15px 15px;
-        }
-        .stats-card {
-            background: white;
-            border-radius: 15px;
-            padding: 1.5rem;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-            transition: transform 0.3s ease;
-            height: 100%;
-        }
-        .stats-card:hover {
-            transform: translateY(-5px);
-        }
-        .stats-icon {
-            font-size: 2.5rem;
-            margin-bottom: 1rem;
-            background: linear-gradient(135deg, #0072ff 0%, #00c6ff 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-        .presence-table {
-            background: white;
-            border-radius: 15px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-            overflow: hidden;
-        }
-        .presence-badge {
-            padding: 0.5em 1em;
-            border-radius: 20px;
-            font-size: 0.85em;
-        }
-        .btn-presence {
-            border-radius: 20px;
-            padding: 0.4em 1em;
-            font-size: 0.9em;
-            transition: all 0.3s ease;
-        }
-        .btn-presence:hover {
-            transform: translateY(-2px);
-        }
-        .dataTables_wrapper {
-            padding: 1rem;
-        }
-        .table > :not(caption) > * > * {
-            padding: 1rem;
-        }
-    </style>
+    <title>Gestion des Absences</title>
+    <link rel="stylesheet" href="../assets/css/style.css">  <!-- Lien vers le fichier CSS -->
 </head>
-<body class="bg-light">
-    <?php include '../includes/header.php'; ?>
+<body>
+    <div class="gestion-presences-container">
+        <h2>Gestion des Absences</h2>
 
-    <div class="presence-header">
-        <div class="container">
-            <div class="row align-items-center">
-                <div class="col-md-8">
-                    <h1 class="display-4 mb-0">Gestion des Présences</h1>
-                    <p class="lead mb-0">Suivi des présences aux séances de TP</p>
-                </div>
-                <div class="col-md-4 text-md-end">
-                    <span class="text-white-50"><?= date('d/m/Y') ?></span>
-                </div>
-            </div>
-        </div>
-    </div>
+        <!-- Affichage des messages de succès ou d'erreur -->
+        <?php if (isset($success_message)): ?>
+            <p style="color: green;"><?= $success_message; ?></p>
+        <?php endif; ?>
 
-    <div class="container pb-5">
-        <!-- Statistiques -->
-        <div class="row g-4 mb-5">
-            <div class="col-md-4">
-                <div class="stats-card">
-                    <i class="fas fa-calendar-check stats-icon"></i>
-                    <h3 class="h5 text-muted">Total des Séances</h3>
-                    <h2 class="display-6 mb-0"><?= count($seances) ?></h2>
-                </div>
-            </div>
-            <div class="col-md-4">
-                <div class="stats-card">
-                    <i class="fas fa-clock stats-icon"></i>
-                    <h3 class="h5 text-muted">Séances Aujourd'hui</h3>
-                    <h2 class="display-6 mb-0">
-                        <?php
-                        $today = date('Y-m-d');
-                        echo count(array_filter($seances, function($s) use ($today) {
-                            return $s['date'] === $today;
-                        }));
-                        ?>
-                    </h2>
-                </div>
-            </div>
-            <div class="col-md-4">
-                <div class="stats-card">
-                    <i class="fas fa-users stats-icon"></i>
-                    <h3 class="h5 text-muted">Groupes Actifs</h3>
-                    <h2 class="display-6 mb-0"><?= count($groupes) ?></h2>
-                </div>
-            </div>
-        </div>
+        <?php if (isset($error_message)): ?>
+            <p style="color: red;"><?= $error_message; ?></p>
+        <?php endif; ?>
 
-        <!-- Tableau des présences -->
-        <div class="presence-table">
-            <div class="table-responsive">
-                <table id="presenceTable" class="table table-hover mb-0">
-                    <thead class="table-light">
+        <!-- Formulaire de sélection de la séance -->
+        <h3>Sélectionner une séance</h3>
+        <form method="GET">
+            <div>
+                <label for="seance_id">Séance :</label>
+                <select name="seance_id" id="seance_id" required>
+                    <option value="">Sélectionner une séance</option>
+                    <?php foreach ($seances as $seance): ?>
+                        <option value="<?= $seance['id']; ?>" <?= isset($_GET['seance_id']) && $_GET['seance_id'] == $seance['id'] ? 'selected' : ''; ?>>
+                            <?= htmlspecialchars($seance['date']); ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+                <button type="submit">Sélectionner</button>
+            </div>
+        </form>
+
+        <?php if (isset($seance_id) && !empty($etudiants)): ?>
+            <h3>Marquer l'absence pour la séance du <?= htmlspecialchars($seance['date']); ?></h3>
+
+            <!-- Formulaire pour marquer les absences des étudiants -->
+            <form method="POST">
+                <input type="hidden" name="seance_id" value="<?= $seance_id; ?>">
+                <table>
+                    <thead>
                         <tr>
-                            <th>Date</th>
-                            <th>Groupe</th>
-                            <th>Horaire</th>
-                            <th>Présences</th>
-                            <th>Statut</th>
-                            <th>Actions</th>
+                            <th>Nom</th>
+                            <th>Prénom</th>
+                            <th>Absence</th>
+                            <th>Absences Totales</th>
                         </tr>
                     </thead>
                     <tbody>
-                        <?php foreach ($seances as $seance): ?>
+                        <?php foreach ($etudiants as $etudiant): ?>
                             <tr>
-                                <td><?= date('d/m/Y', strtotime($seance['date'])) ?></td>
-                                <td><?= htmlspecialchars($seance['nom_groupe']) ?></td>
+                                <td><?= htmlspecialchars($etudiant['nom']); ?></td>
+                                <td><?= htmlspecialchars($etudiant['prenom']); ?></td>
                                 <td>
-                                    <?php 
-                                    $debut = $seance['heure_debut'] ?? 'Non définie';
-                                    $fin = $seance['heure_fin'] ?? 'Non définie';
-                                    echo "$debut - $fin";
-                                    ?>
+                                    <!-- Cocher pour marquer comme absent (absence = 1) -->
+                                    <input type="checkbox" name="absence[<?= $etudiant['id']; ?>]" value="0">
                                 </td>
                                 <td>
-                                    <span class="badge bg-success presence-badge">
-                                        <i class="fas fa-check me-1"></i><?= (int)$seance['presents_count'] ?>
-                                    </span>
-                                    <span class="badge bg-danger presence-badge ms-2">
-                                        <i class="fas fa-times me-1"></i><?= (int)$seance['absents_count'] ?>
-                                    </span>
-                                </td>
-                                <td>
-                                    <?php
-                                    $now = time();
-                                    $seanceTime = strtotime($seance['date'] . ' ' . $debut);
-                                    $seanceFin = strtotime($seance['date'] . ' ' . $fin);
-                                    
-                                    if ($now < $seanceTime) {
-                                        echo '<span class="badge bg-warning text-dark">À venir</span>';
-                                    } elseif ($now > $seanceFin) {
-                                        echo '<span class="badge bg-secondary">Terminée</span>';
-                                    } else {
-                                        echo '<span class="badge bg-success">En cours</span>';
-                                    }
-                                    ?>
-                                </td>
-                                <td>
-                                    <a href="marquer_presences.php?id=<?= $seance['id'] ?>" 
-                                       class="btn btn-primary btn-presence">
-                                        <i class="fas fa-clipboard-check me-1"></i>Marquer
-                                    </a>
-                                    <a href="voir_presences.php?id=<?= $seance['id'] ?>" 
-                                       class="btn btn-info btn-presence text-white ms-2">
-                                        <i class="fas fa-eye me-1"></i>Voir
-                                    </a>
+                                    <!-- Afficher le nombre total d'absences pour cet étudiant -->
+                                    <?= isset($absences_count[$etudiant['id']]) ? $absences_count[$etudiant['id']] : 0; ?> Absence(s)
                                 </td>
                             </tr>
                         <?php endforeach; ?>
                     </tbody>
                 </table>
-            </div>
-        </div>
+                <button type="submit" name="marquer_presence">Enregistrer les absences</button>
+            </form>
+        <?php endif; ?>
+
+        <a href="dashboard.php">Retour au tableau de bord</a>
     </div>
-
-    <?php include '../includes/footer.php'; ?>
-
-    <!-- Scripts -->
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://cdn.datatables.net/1.11.5/js/jquery.dataTables.min.js"></script>
-    <script src="https://cdn.datatables.net/1.11.5/js/dataTables.bootstrap5.min.js"></script>
-    <script>
-        $(document).ready(function() {
-            $('#presenceTable').DataTable({
-                language: {
-                    url: '//cdn.datatables.net/plug-ins/1.11.5/i18n/fr-FR.json'
-                },
-                order: [[0, 'desc']],
-                pageLength: 10,
-                lengthMenu: [[10, 25, 50, -1], [10, 25, 50, "Tous"]],
-                responsive: true
-            });
-        });
-    </script>
+    
+    <script src="../assets/js/script.js"></script>  <!-- Lien vers le fichier JS -->
 </body>
 </html>
