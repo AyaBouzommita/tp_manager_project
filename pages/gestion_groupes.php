@@ -1,45 +1,16 @@
 <?php
 session_start();
+require_once '../includes/db.php';
+require_once '../includes/groupe_operations.php';
 
-// Vérifier si l'utilisateur est connecté (si la session existe)
+// Vérifier si l'utilisateur est connecté
 if (!isset($_SESSION['prof_id'])) {
-    // Si l'utilisateur n'est pas connecté, rediriger vers la page de connexion
-    header("Location: login.php");
+    header('Location: login.php');
     exit();
 }
 
-require '../includes/db.php';  // Connexion à la base de données
-
-// Vérifier si un nouveau groupe est ajouté
-if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['ajouter_groupe'])) {
-    $nom_groupe = $_POST['nom_groupe'];
-
-    // Vérifier si le nom du groupe est vide
-    if (!empty($nom_groupe)) {
-        // Insertion du groupe dans la base de données
-        $stmt = $conn->prepare("INSERT INTO groupes (nom) VALUES (?)");
-        $stmt->bind_param("s", $nom_groupe);
-        $stmt->execute();
-        $success_message = "Groupe ajouté avec succès.";
-    } else {
-        $error_message = "Le nom du groupe ne peut pas être vide.";
-    }
-}
-
-// Vérifier si un groupe doit être supprimé
-if (isset($_GET['supprimer_groupe_id'])) {
-    $groupe_id = $_GET['supprimer_groupe_id'];
-
-    // Supprimer le groupe de la base de données
-    $stmt = $conn->prepare("DELETE FROM groupes WHERE id = ?");
-    $stmt->bind_param("i", $groupe_id);
-    $stmt->execute();
-    $success_message = "Groupe supprimé avec succès.";
-}
-
-// Récupérer la liste des groupes existants
-$result = $conn->query("SELECT * FROM groupes");
-$groupes = $result->fetch_all(MYSQLI_ASSOC);
+// Récupérer tous les groupes
+$groupes = getAllGroupes();
 ?>
 
 <!DOCTYPE html>
@@ -48,58 +19,152 @@ $groupes = $result->fetch_all(MYSQLI_ASSOC);
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gestion des Groupes</title>
-    <link rel="stylesheet" href="../assets/css/style.css">  <!-- Lien vers le fichier CSS -->
+    <?php include '../includes/header.php'; ?>
 </head>
-<body>
-    <div class="gestion-groupes-container">
-        <h2>Gestion des Groupes</h2>
+<body class="d-flex flex-column min-vh-100">
+    <div class="container mt-5 pt-4">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>Gestion des Groupes</h1>
+            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addGroupeModal">
+                <i class="fas fa-plus"></i> Nouveau Groupe
+            </button>
+        </div>
 
-        <!-- Affichage des messages de succès ou d'erreur -->
-        <?php if (isset($success_message)): ?>
-            <p style="color: green;"><?= $success_message; ?></p>
-        <?php endif; ?>
-
-        <?php if (isset($error_message)): ?>
-            <p style="color: red;"><?= $error_message; ?></p>
-        <?php endif; ?>
-
-        <!-- Formulaire pour ajouter un nouveau groupe -->
-        <h3>Ajouter un nouveau groupe</h3>
-        <form method="POST">
-            <div>
-                <label for="nom_groupe">Nom du groupe :</label>
-                <input type="text" name="nom_groupe" id="nom_groupe" required placeholder="Entrez le nom du groupe">
+        <?php if (isset($_SESSION['success'])): ?>
+            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                <?php 
+                echo $_SESSION['success'];
+                unset($_SESSION['success']);
+                ?>
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
             </div>
-            <button type="submit" name="ajouter_groupe">Ajouter</button>
-        </form>
+        <?php endif; ?>
 
-        <h3>Liste des Groupes</h3>
-        <table>
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>Nom du Groupe</th>
-                    <th>Action</th>
-                </tr>
-            </thead>
-            <tbody>
-                <?php foreach ($groupes as $groupe): ?>
-                    <tr>
-                        <td><?= $groupe['id']; ?></td>
-                        <td><?= htmlspecialchars($groupe['nom']); ?></td>
-                        <td>
-                            <!-- Lien pour supprimer un groupe -->
-                            <a href="?supprimer_groupe_id=<?= $groupe['id']; ?>" onclick="return confirm('Êtes-vous sûr de vouloir supprimer ce groupe ?')">Supprimer</a>
-                        </td>
-                    </tr>
-                <?php endforeach; ?>
-            </tbody>
-        </table>
+        <?php if (isset($_SESSION['error'])): ?>
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                <?php 
+                echo $_SESSION['error'];
+                unset($_SESSION['error']);
+                ?>
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        <?php endif; ?>
 
-        <a href="dashboard.php">Retour au tableau de bord</a>
+        <div class="row">
+            <?php foreach ($groupes as $groupe): ?>
+                <div class="col-md-4 mb-4">
+                    <div class="card shadow-sm">
+                        <div class="card-header bg-primary text-white">
+                            <h5 class="card-title mb-0">
+                                <i class="fas fa-users me-2"></i>
+                                <?php echo htmlspecialchars($groupe['nom']); ?>
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="btn-group w-100">
+                                <button class="btn btn-outline-primary" data-bs-toggle="modal" 
+                                        data-bs-target="#editGroupeModal<?php echo $groupe['id']; ?>">
+                                    <i class="fas fa-edit"></i> Éditer
+                                </button>
+                                <button class="btn btn-outline-danger" data-bs-toggle="modal" 
+                                        data-bs-target="#deleteGroupeModal<?php echo $groupe['id']; ?>">
+                                    <i class="fas fa-trash"></i> Supprimer
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            <?php endforeach; ?>
+        </div>
     </div>
 
+    <!-- Modal Ajout Groupe -->
+    <div class="modal fade" id="addGroupeModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">Ajouter un Groupe</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <form action="add_groupe.php" method="POST">
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label for="nom" class="form-label">Nom du groupe</label>
+                            <input type="text" class="form-control" id="nom" name="nom" required>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+                        <button type="submit" class="btn btn-primary">Ajouter</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modals pour édition et suppression -->
+    <?php foreach ($groupes as $groupe): ?>
+        <!-- Modal Édition -->
+        <div class="modal fade" id="editGroupeModal<?php echo $groupe['id']; ?>" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header bg-primary text-white">
+                        <h5 class="modal-title">Modifier le Groupe</h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    </div>
+                    <form action="edit_groupe.php" method="POST">
+                        <div class="modal-body">
+                            <input type="hidden" name="id" value="<?php echo $groupe['id']; ?>">
+                            <div class="mb-3">
+                                <label for="nom<?php echo $groupe['id']; ?>" class="form-label">Nom du groupe</label>
+                                <input type="text" class="form-control" id="nom<?php echo $groupe['id']; ?>" 
+                                       name="nom" value="<?php echo htmlspecialchars($groupe['nom']); ?>" required>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+                            <button type="submit" class="btn btn-primary">Enregistrer</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal Suppression -->
+        <div class="modal fade" id="deleteGroupeModal<?php echo $groupe['id']; ?>" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header bg-danger text-white">
+                        <h5 class="modal-title">Confirmer la suppression</h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p>Êtes-vous sûr de vouloir supprimer le groupe "<?php echo htmlspecialchars($groupe['nom']); ?>" ?</p>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+                        <form action="delete_groupe.php" method="POST" class="d-inline">
+                            <input type="hidden" name="id" value="<?php echo $groupe['id']; ?>">
+                            <button type="submit" class="btn btn-danger">Supprimer</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    <?php endforeach; ?>
+
     <?php include '../includes/footer.php'; ?>
-    
+    <script>
+        // Auto-hide alerts after 5 seconds
+        document.addEventListener('DOMContentLoaded', function() {
+            setTimeout(function() {
+                var alerts = document.querySelectorAll('.alert');
+                alerts.forEach(function(alert) {
+                    var bsAlert = new bootstrap.Alert(alert);
+                    bsAlert.close();
+                });
+            }, 5000);
+        });
+    </script>
 </body>
 </html>
