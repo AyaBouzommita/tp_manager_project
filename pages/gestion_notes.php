@@ -6,7 +6,11 @@ require_once '../includes/db.php';
 checkUserSession();
 
 // Récupérer toutes les séances
-$stmt = $conn->prepare("SELECT id, date FROM seances ORDER BY date DESC");
+$stmt = $conn->prepare("SELECT s.id, s.date, 
+    (SELECT COUNT(*) FROM notes n WHERE n.seance_id = s.id) as nb_notes,
+    (SELECT COUNT(*) FROM etudiants) as total_etudiants,
+    (SELECT AVG(note_totale) FROM notes n WHERE n.seance_id = s.id) as moyenne_seance
+    FROM seances s ORDER BY s.date DESC");
 $stmt->execute();
 $seances = $stmt->get_result();
 
@@ -85,111 +89,301 @@ if ($selectedSeanceId) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gestion des Notes - TP Manager</title>
-    <link rel="stylesheet" href="../assets/css/gestion_notes.css">
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-</head>
-<body>
-    <div class="notes-container">
-        <div class="notes-header">
-            <h1><i class="fas fa-graduation-cap"></i> Gestion des Notes</h1>
+    <!-- DataTables -->
+    <link href="https://cdn.datatables.net/1.11.5/css/dataTables.bootstrap5.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary-gradient: linear-gradient(135deg, #4CAF50 0%, #2196F3 100%);
+            --secondary-gradient: linear-gradient(135deg, #FF9800 0%, #F44336 100%);
+        }
+        
+        .notes-header {
+            background: var(--primary-gradient);
+            color: white;
+            padding: 2rem 0;
+            margin-bottom: 2rem;
+            border-radius: 0 0 15px 15px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+
+        .stats-card {
+            background: white;
+            border-radius: 15px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease;
+            height: 100%;
+            margin-bottom: 1rem;
+        }
+
+        .stats-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .stats-icon {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+            background: var(--primary-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .seance-selector {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 15px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            margin-bottom: 2rem;
+        }
+
+        .notes-table {
+            background: white;
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+
+        .notes-table thead {
+            background: var(--primary-gradient);
+            color: white;
+        }
+
+        .notes-table th {
+            padding: 1rem;
+            font-weight: 500;
+        }
+
+        .notes-table td {
+            padding: 0.75rem;
+            vertical-align: middle;
+        }
+
+        .notes-table tbody tr:hover {
+            background-color: rgba(0,0,0,0.02);
+        }
+
+        .form-control {
+            border-radius: 10px;
+            border: 1px solid #e0e0e0;
+            padding: 0.5rem 1rem;
+            transition: all 0.3s ease;
+        }
+
+        .form-control:focus {
+            box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.1);
+            border-color: #2196F3;
+        }
+
+        .btn {
+            border-radius: 10px;
+            padding: 0.5rem 1.5rem;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary {
+            background: var(--primary-gradient);
+            border: none;
+        }
+
+        .btn-secondary {
+            background: var(--secondary-gradient);
+            border: none;
+            color: white;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+        }
+
+        .alert {
+            border-radius: 10px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            border: none;
+        }
+
+        .alert-success {
+            background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+            color: white;
+        }
+
+        .alert-error {
+            background: var(--secondary-gradient);
+            color: white;
+        }
+
+        .note-input {
+            width: 70px;
+            text-align: center;
+            font-weight: 500;
+        }
+
+        .note-totale {
+            font-weight: bold;
+            font-size: 1.1em;
+            color: #2196F3;
+        }
+
+        .action-buttons {
+            margin-top: 2rem;
+            display: flex;
+            gap: 1rem;
+            justify-content: flex-end;
+        }
+
+        @media (max-width: 768px) {
+            .notes-table {
+                display: block;
+                overflow-x: auto;
+            }
             
-            <?php 
-            $flashMessage = getFlashMessage();
-            if ($flashMessage): 
-            ?>
-                <div class="alert alert-<?= $flashMessage['type'] ?>">
-                    <i class="fas fa-check-circle"></i>
-                    <?= htmlspecialchars($flashMessage['message']) ?>
+            .action-buttons {
+                flex-direction: column;
+            }
+            
+            .btn {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body class="bg-light">
+    <?php include '../includes/header.php'; ?>
+
+    <div class="container py-4">
+        <div class="notes-header">
+            <div class="container">
+                <div class="row align-items-center">
+                    <div class="col-md-8">
+                        <h1 class="display-4 mb-0">Gestion des Notes</h1>
+                        <p class="lead mb-0">Évaluez et suivez les performances de vos étudiants</p>
+                    </div>
+                    <div class="col-md-4 text-md-end">
+                        <span class="text-white-50"><?= date('d/m/Y') ?></span>
+                    </div>
                 </div>
-            <?php endif; ?>
+            </div>
         </div>
 
-        <form method="POST" class="seance-selector">
-            <label for="seance_id">
-                <i class="fas fa-calendar"></i> Sélectionner une séance :
-            </label>
-            <select name="seance_id" id="seance_id">
-                <option value="">Choisir une séance</option>
-                <?php while ($seance = $seances->fetch_assoc()): ?>
-                    <option value="<?= $seance['id'] ?>" <?= ($selectedSeanceId == $seance['id']) ? 'selected' : '' ?>>
-                        <?= htmlspecialchars(date('d/m/Y', strtotime($seance['date']))) ?>
-                    </option>
-                <?php endwhile; ?>
-            </select>
-            <button type="submit" class="btn-select">
-                <i class="fas fa-check"></i> Sélectionner
-            </button>
-        </form>
+        <?php 
+        $flashMessage = getFlashMessage();
+        if ($flashMessage): 
+        ?>
+            <div class="alert alert-<?= $flashMessage['type'] ?> d-flex align-items-center">
+                <i class="fas <?= $flashMessage['type'] === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle' ?> me-2"></i>
+                <?= htmlspecialchars($flashMessage['message']) ?>
+            </div>
+        <?php endif; ?>
+
+        <div class="seance-selector">
+            <form method="POST" class="row align-items-end">
+                <div class="col-md-8">
+                    <label for="seance_id" class="form-label">
+                        <i class="fas fa-calendar me-2"></i>Sélectionner une séance
+                    </label>
+                    <select name="seance_id" id="seance_id" class="form-select">
+                        <option value="">Choisir une séance</option>
+                        <?php while ($seance = $seances->fetch_assoc()): ?>
+                            <option value="<?= $seance['id'] ?>" <?= ($selectedSeanceId == $seance['id']) ? 'selected' : '' ?>>
+                                <?= htmlspecialchars(date('d/m/Y', strtotime($seance['date']))) ?> 
+                                (<?= $seance['nb_notes'] ?>/<?= $seance['total_etudiants'] ?> notes - 
+                                Moyenne: <?= number_format($seance['moyenne_seance'], 2) ?>/20)
+                            </option>
+                        <?php endwhile; ?>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="fas fa-check me-2"></i>Sélectionner
+                    </button>
+                </div>
+            </form>
+        </div>
 
         <?php if ($selectedSeanceId && !empty($etudiants)): ?>
             <form method="POST" id="notesForm">
                 <input type="hidden" name="seance_id" value="<?= $selectedSeanceId ?>">
                 
-                <table class="notes-table">
-                    <thead>
-                        <tr>
-                            <th>Nom</th>
-                            <th>Prénom</th>
-                            <th>Travail <small>(5 pts)</small></th>
-                            <th>Compte Rendu <small>(5 pts)</small></th>
-                            <th>Tâches Terminées <small>(5 pts)</small></th>
-                            <th>Discipline <small>(5 pts)</small></th>
-                            <th>Note Totale <small>(20 pts)</small></th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php foreach ($etudiants as $etudiant): ?>
+                <div class="notes-table">
+                    <table class="table table-hover mb-0">
+                        <thead>
                             <tr>
-                                <td><?= htmlspecialchars($etudiant['nom']) ?></td>
-                                <td><?= htmlspecialchars($etudiant['prenom']) ?></td>
-                                <td>
-                                    <input type="number" min="0" max="5" step="0.5" 
-                                           name="notes[<?= $etudiant['id'] ?>][travail]"
-                                           value="<?= isset($notes[$etudiant['id']]) ? $notes[$etudiant['id']]['travail'] : '' ?>">
-                                </td>
-                                <td>
-                                    <input type="number" min="0" max="5" step="0.5" 
-                                           name="notes[<?= $etudiant['id'] ?>][compte_rendu]"
-                                           value="<?= isset($notes[$etudiant['id']]) ? $notes[$etudiant['id']]['compte_rendu'] : '' ?>">
-                                </td>
-                                <td>
-                                    <input type="number" min="0" max="5" step="0.5" 
-                                           name="notes[<?= $etudiant['id'] ?>][taches_terminees]"
-                                           value="<?= isset($notes[$etudiant['id']]) ? $notes[$etudiant['id']]['taches_terminees'] : '' ?>">
-                                </td>
-                                <td>
-                                    <input type="number" min="0" max="5" step="0.5" 
-                                           name="notes[<?= $etudiant['id'] ?>][discipline]"
-                                           value="<?= isset($notes[$etudiant['id']]) ? $notes[$etudiant['id']]['discipline'] : '' ?>">
-                                </td>
-                                <td class="note-totale">
-                                    <?= isset($notes[$etudiant['id']]) ? $notes[$etudiant['id']]['note_totale'] : '0' ?>
-                                </td>
+                                <th>Étudiant</th>
+                                <th>Travail <small>(5 pts)</small></th>
+                                <th>Compte Rendu <small>(5 pts)</small></th>
+                                <th>Tâches <small>(5 pts)</small></th>
+                                <th>Discipline <small>(5 pts)</small></th>
+                                <th>Total <small>(20 pts)</small></th>
                             </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($etudiants as $etudiant): ?>
+                                <tr>
+                                    <td>
+                                        <div class="fw-bold"><?= htmlspecialchars($etudiant['nom']) ?></div>
+                                        <small class="text-muted"><?= htmlspecialchars($etudiant['prenom']) ?></small>
+                                    </td>
+                                    <td>
+                                        <input type="number" min="0" max="5" step="0.5" 
+                                               class="form-control note-input"
+                                               name="notes[<?= $etudiant['id'] ?>][travail]"
+                                               value="<?= isset($notes[$etudiant['id']]) ? $notes[$etudiant['id']]['travail'] : '' ?>">
+                                    </td>
+                                    <td>
+                                        <input type="number" min="0" max="5" step="0.5" 
+                                               class="form-control note-input"
+                                               name="notes[<?= $etudiant['id'] ?>][compte_rendu]"
+                                               value="<?= isset($notes[$etudiant['id']]) ? $notes[$etudiant['id']]['compte_rendu'] : '' ?>">
+                                    </td>
+                                    <td>
+                                        <input type="number" min="0" max="5" step="0.5" 
+                                               class="form-control note-input"
+                                               name="notes[<?= $etudiant['id'] ?>][taches_terminees]"
+                                               value="<?= isset($notes[$etudiant['id']]) ? $notes[$etudiant['id']]['taches_terminees'] : '' ?>">
+                                    </td>
+                                    <td>
+                                        <input type="number" min="0" max="5" step="0.5" 
+                                               class="form-control note-input"
+                                               name="notes[<?= $etudiant['id'] ?>][discipline]"
+                                               value="<?= isset($notes[$etudiant['id']]) ? $notes[$etudiant['id']]['discipline'] : '' ?>">
+                                    </td>
+                                    <td class="note-totale text-center">
+                                        <?= isset($notes[$etudiant['id']]) ? $notes[$etudiant['id']]['note_totale'] : '0' ?>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
 
                 <div class="action-buttons">
-                    <button type="submit" name="calculer" class="btn btn-calculate">
-                        <i class="fas fa-calculator"></i> Calculer les notes totales
+                    <button type="submit" name="calculer" class="btn btn-secondary">
+                        <i class="fas fa-calculator me-2"></i>Calculer les notes
                     </button>
-                    <button type="submit" name="enregistrer" class="btn btn-save">
-                        <i class="fas fa-save"></i> Enregistrer les notes
+                    <button type="submit" name="enregistrer" class="btn btn-primary">
+                        <i class="fas fa-save me-2"></i>Enregistrer
                     </button>
-                    <a href="dashboard.php" class="btn btn-return">
-                        <i class="fas fa-arrow-left"></i> Retour au tableau de bord
-                    </a>
                 </div>
             </form>
         <?php elseif ($selectedSeanceId): ?>
             <div class="alert alert-error">
-                <i class="fas fa-exclamation-circle"></i>
+                <i class="fas fa-exclamation-circle me-2"></i>
                 Aucun étudiant trouvé pour cette séance.
             </div>
         <?php endif; ?>
     </div>
 
+    <!-- Scripts -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.datatables.net/1.11.5/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.11.5/js/dataTables.bootstrap5.min.js"></script>
     <script>
         // Calcul automatique des notes totales
         document.querySelectorAll('input[type="number"]').forEach(input => {
@@ -199,19 +393,29 @@ if ($selectedSeanceId) {
                 let total = 0;
                 
                 inputs.forEach(input => {
-                    total += Number(input.value) || 0;
+                    total += !isNaN(input.value) && input.value !== '' ? parseFloat(input.value) : 0;
                 });
                 
-                row.querySelector('.note-totale').textContent = total.toFixed(1);
+                row.querySelector('.note-totale').textContent = total.toFixed(2);
             });
         });
 
-        // Animation de chargement lors de la soumission
-        document.querySelectorAll('form').forEach(form => {
-            form.addEventListener('submit', function() {
-                this.classList.add('loading');
+        // Animation des cartes au scroll
+        function revealOnScroll() {
+            const cards = document.querySelectorAll('.stats-card, .notes-table');
+            cards.forEach(card => {
+                const cardTop = card.getBoundingClientRect().top;
+                const triggerBottom = window.innerHeight * 0.8;
+                
+                if (cardTop < triggerBottom) {
+                    card.style.opacity = '1';
+                    card.style.transform = 'translateY(0)';
+                }
             });
-        });
+        }
+
+        window.addEventListener('scroll', revealOnScroll);
+        revealOnScroll();
     </script>
 </body>
 </html>
