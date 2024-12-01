@@ -122,7 +122,7 @@ if (isset($_GET['get_etudiant'])) {
             <table class="students-table">
                 <thead>
                     <tr>
-                        <th>ID</th>
+                
                         <th>Nom</th>
                         <th>Prénom</th>
                         <th>Groupe</th>
@@ -132,7 +132,7 @@ if (isset($_GET['get_etudiant'])) {
                 <tbody>
                     <?php foreach ($etudiants as $etudiant): ?>
                         <tr>
-                            <td><?= $etudiant['id']; ?></td>
+                        
                             <td><?= htmlspecialchars($etudiant['nom']); ?></td>
                             <td><?= htmlspecialchars($etudiant['prenom']); ?></td>
                             <td><?= htmlspecialchars($etudiant['groupe_nom']); ?></td>

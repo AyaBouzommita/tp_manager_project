@@ -47,8 +47,8 @@ function login($email, $password)
         if (password_verify($password, $prof['password'])) {
             // Stocker les informations utilisateur dans la session
             $_SESSION['prof_id'] = $prof['id'];
-            $_SESSION['prof_nom'] = $prof['nom'];
-            $_SESSION['prof_prenom'] = $prof['prenom'];
+            $_SESSION['nom'] = $prof['nom'];
+            $_SESSION['prenom'] = $prof['prenom'];
 
             return $prof['nom'] . ' ' . $prof['prenom']; // Retourne le nom complet
         }
@@ -78,8 +78,8 @@ function getAuthenticatedUser()
     if (isAuthenticated()) {
         return [
             'id' => $_SESSION['prof_id'],
-            'nom' => $_SESSION['prof_nom'],
-            'prenom' => $_SESSION['prof_prenom'],
+            'nom' => $_SESSION['nom'],
+            'prenom' => $_SESSION['prenom'],
         ];
     }
     return null;

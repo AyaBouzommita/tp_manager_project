@@ -363,9 +363,7 @@ if ($selectedSeanceId) {
                 </div>
 
                 <div class="action-buttons">
-                    <button type="submit" name="calculer" class="btn btn-secondary">
-                        <i class="fas fa-calculator me-2"></i>Calculer les notes
-                    </button>
+                 
                     <button type="submit" name="enregistrer" class="btn btn-primary">
                         <i class="fas fa-save me-2"></i>Enregistrer
                     </button>

@@ -8,22 +8,9 @@
 </head>
 <body>
     <div class="dashboard-container">
-        <h2>Bienvenue, <?= htmlspecialchars($_SESSION['prof_nom']); ?> <?= htmlspecialchars($_SESSION['prof_prenom']); ?></h2>
-        <p>Vous êtes connecté en tant que professeur.</p>
+       
 
-        <!-- Menu de navigation -->
-        <nav>
-            <ul>
-                <li><a href="gestion_groupes.php">Gestion des Groupes</a></li>
-                <li><a href="gestion_etudiants.php">Gestion des Étudiants</a></li>
-                <li><a href="gestion_seances.php">Gestion des Séances</a></li>
-                <li><a href="gestion_presences.php">Gestion des Présences</a></li>
-                <li><a href="gestion_notes.php">Gestion des Notes</a></li>
-            </ul>
-        </nav>
-
-        <!-- Bouton déconnexion -->
-        <a href="logout.php" class="logout">Déconnexion</a>
+       
     </div>
     <?php
     if (session_status() === PHP_SESSION_NONE) {
@@ -38,8 +25,8 @@
                     <h5>Gestion des TP</h5>
                     <p class="mb-0">
                         &copy; <?php echo date('Y'); ?> Tous droits réservés
-                        <?php if (isset($_SESSION['prof_nom']) && isset($_SESSION['prof_prenom'])): ?>
-                            | Connecté en tant que: <?php echo htmlspecialchars($_SESSION['prof_nom']); ?> <?php echo htmlspecialchars($_SESSION['prof_prenom']); ?>
+                        <?php if (isset($_SESSION['nom']) && isset($_SESSION['prenom'])): ?>
+                            | Connecté en tant que: <?php echo htmlspecialchars($_SESSION['nom']); ?> <?php echo htmlspecialchars($_SESSION['prenom']); ?>
                         <?php endif; ?>
                     </p>
                 </div>
