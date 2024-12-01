@@ -32,45 +32,167 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     }
 }
 ?>
-
 <!DOCTYPE html>
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Connexion - Gestion des TP</title>
-    <link rel="stylesheet" href="../assets/css/style.css">  <!-- Lien vers le fichier CSS -->
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #0072ff 0%, #00c6ff 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .login-card {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+            backdrop-filter: blur(10px);
+            transition: transform 0.3s ease;
+        }
+        .login-card:hover {
+            transform: translateY(-5px);
+        }
+        .login-header {
+            background: linear-gradient(135deg, #0072ff 0%, #00c6ff 100%);
+            color: white;
+            padding: 2rem;
+            border-radius: 15px 15px 0 0;
+            text-align: center;
+        }
+        .login-header i {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+        }
+        .form-control {
+            border-radius: 10px;
+            padding: 0.75rem 1rem;
+            border: 1px solid #e1e1e1;
+            margin-bottom: 1rem;
+        }
+        .form-control:focus {
+            box-shadow: 0 0 0 0.2rem rgba(0, 114, 255, 0.25);
+            border-color: #0072ff;
+        }
+        .btn-login {
+            background: linear-gradient(135deg, #0072ff 0%, #00c6ff 100%);
+            border: none;
+            border-radius: 10px;
+            padding: 0.75rem;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            transition: all 0.3s ease;
+        }
+        .btn-login:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 114, 255, 0.3);
+        }
+        .register-link {
+            color: #0072ff;
+            text-decoration: none;
+            font-weight: 500;
+            transition: color 0.3s ease;
+        }
+        .register-link:hover {
+            color: #00c6ff;
+        }
+        .input-group-text {
+            background: transparent;
+            border-right: none;
+        }
+        .input-group .form-control {
+            border-left: none;
+        }
+        .input-group .form-control:focus {
+            border-left: none;
+            border-color: #e1e1e1;
+        }
+        .alert {
+            border-radius: 10px;
+            margin-bottom: 1.5rem;
+        }
+    </style>
 </head>
 <body>
-    <div class="login-container">
-        <h2>Se connecter</h2>
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-md-5 col-lg-4">
+                <div class="login-card">
+                    <div class="login-header">
+                        <i class="fas fa-graduation-cap mb-3"></i>
+                        <h2 class="h4 mb-0">Gestion des TP</h2>
+                    </div>
+                    <div class="card-body p-4">
+                        <?php if (isset($error)): ?>
+                            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                                <i class="fas fa-exclamation-circle me-2"></i>
+                                <?= $error; ?>
+                                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                            </div>
+                        <?php endif; ?>
 
-        <!-- Affichage des erreurs s'il y en a -->
-        <?php if (isset($error)): ?>
-            <p style="color: red;"><?= $error; ?></p>
-        <?php endif; ?>
+                        <form method="POST" action="" class="needs-validation" novalidate>
+                            <div class="input-group mb-3">
+                                <span class="input-group-text">
+                                    <i class="fas fa-envelope text-muted"></i>
+                                </span>
+                                <input type="email" class="form-control" id="email" name="email" placeholder="Adresse email" required>
+                            </div>
 
-        <!-- Formulaire de connexion -->
-        <form method="POST">
-            <div>
-                <label for="email">Email :</label>
-                <input type="email" name="email" id="email" required placeholder="Entrez votre email" />
+                            <div class="input-group mb-4">
+                                <span class="input-group-text">
+                                    <i class="fas fa-lock text-muted"></i>
+                                </span>
+                                <input type="password" class="form-control" id="password" name="password" placeholder="Mot de passe" required>
+                            </div>
+
+                            <div class="d-grid">
+                                <button type="submit" class="btn btn-primary btn-login">
+                                    <i class="fas fa-sign-in-alt me-2"></i>Se connecter
+                                </button>
+                            </div>
+                        </form>
+
+                        <div class="text-center mt-4">
+                            <p class="mb-0">Pas encore de compte ? 
+                                <a href="inscription.php" class="register-link">
+                                    Créer un compte
+                                    <i class="fas fa-arrow-right ms-1"></i>
+                                </a>
+                            </p>
+                        </div>
+                    </div>
+                </div>
             </div>
-
-            <div>
-                <label for="password">Mot de passe :</label>
-                <input type="password" name="password" id="password" required placeholder="Entrez votre mot de passe" />
-            </div>
-
-            <button type="submit">Se connecter</button>
-        </form>
-
-        <!-- Bouton pour rediriger vers la page d'inscription -->
-        <div class="register-link">
-            <p>Pas encore de compte ? <a href="inscription.php">Créez un compte</a></p>
         </div>
     </div>
 
-    <script src="../assets/js/script.js"></script>  <!-- Lien vers le fichier JS -->
+    <!-- Bootstrap JS Bundle with Popper -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Form validation
+        (function () {
+            'use strict'
+            var forms = document.querySelectorAll('.needs-validation')
+            Array.prototype.slice.call(forms)
+                .forEach(function (form) {
+                    form.addEventListener('submit', function (event) {
+                        if (!form.checkValidity()) {
+                            event.preventDefault()
+                            event.stopPropagation()
+                        }
+                        form.classList.add('was-validated')
+                    }, false)
+                })
+        })()
+    </script>
 </body>
 </html>
