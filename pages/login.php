@@ -1,26 +1,19 @@
 <?php
 session_start();
-require '../includes/db.php';  // Connexion à la base de données
+require '../includes/db.php'; 
 
-// Vérification de la soumission du formulaire
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    // Récupérer l'email et le mot de passe soumis par l'utilisateur
     $email = $_POST['email'];
     $password = $_POST['password'];
 
-    // Requête pour rechercher l'utilisateur avec l'email donné
     $stmt = $conn->prepare("SELECT * FROM professeurs WHERE email = ?");
-    $stmt->bind_param("s", $email);  // Protéger contre les injections SQL
+    $stmt->bind_param("s", $email);  
     $stmt->execute();
     $result = $stmt->get_result();
 
     if ($result->num_rows > 0) {
-        // L'utilisateur est trouvé, vérifier le mot de passe
         $prof = $result->fetch_assoc();
-        
-        // Vérification du mot de passe
         if (password_verify($password, $prof['mot_de_passe'])) {
-            // Mot de passe correct, créer la session et rediriger
             $_SESSION['prof_id'] = $prof['id'];
             header("Location: dashboard.php");
             exit();
@@ -44,11 +37,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
         body {
-            background: linear-gradient(135deg, #0072ff 0%, #00c6ff 100%);
+            background: linear-gradient(135deg, #4CAF50, #2196F3);
             min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
+            color: #fff;
         }
         .login-card {
             background: rgba(255, 255, 255, 0.95);
@@ -57,19 +51,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             backdrop-filter: blur(10px);
             transition: transform 0.3s ease;
         }
-        .login-card:hover {
-            transform: translateY(-5px);
-        }
         .login-header {
-            background: linear-gradient(135deg, #0072ff 0%, #00c6ff 100%);
+            background: linear-gradient(135deg, #4CAF50, #2196F3);
             color: white;
             padding: 2rem;
             border-radius: 15px 15px 0 0;
             text-align: center;
-        }
-        .login-header i {
-            font-size: 3rem;
-            margin-bottom: 1rem;
         }
         .form-control {
             border-radius: 10px;
@@ -81,17 +68,17 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             box-shadow: 0 0 0 0.2rem rgba(0, 114, 255, 0.25);
             border-color: #0072ff;
         }
-        .btn-login {
-            background: linear-gradient(135deg, #0072ff 0%, #00c6ff 100%);
+        .btn-login, .btn-home {
+            background: linear-gradient(135deg, #4CAF50, #2196F3);
             border: none;
             border-radius: 10px;
             padding: 0.75rem;
             font-weight: 600;
-            letter-spacing: 0.5px;
             text-transform: uppercase;
             transition: all 0.3s ease;
+            color: white;
         }
-        .btn-login:hover {
+        .btn-login:hover, .btn-home:hover {
             transform: translateY(-2px);
             box-shadow: 0 5px 15px rgba(0, 114, 255, 0.3);
         }
@@ -99,21 +86,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             color: #0072ff;
             text-decoration: none;
             font-weight: 500;
-            transition: color 0.3s ease;
         }
         .register-link:hover {
             color: #00c6ff;
-        }
-        .input-group-text {
-            background: transparent;
-            border-right: none;
-        }
-        .input-group .form-control {
-            border-left: none;
-        }
-        .input-group .form-control:focus {
-            border-left: none;
-            border-color: #e1e1e1;
         }
         .alert {
             border-radius: 10px;
@@ -132,26 +107,25 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     </div>
                     <div class="card-body p-4">
                         <?php if (isset($error)): ?>
-                            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                            <div class="alert alert-danger" role="alert">
                                 <i class="fas fa-exclamation-circle me-2"></i>
-                                <?= $error; ?>
-                                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                                <?= htmlspecialchars($error); ?>
                             </div>
                         <?php endif; ?>
 
-                        <form method="POST" action="" class="needs-validation" novalidate>
+                        <form method="POST">
                             <div class="input-group mb-3">
                                 <span class="input-group-text">
                                     <i class="fas fa-envelope text-muted"></i>
                                 </span>
-                                <input type="email" class="form-control" id="email" name="email" placeholder="Adresse email" required>
+                                <input type="email" class="form-control" name="email" placeholder="Adresse email" required>
                             </div>
 
                             <div class="input-group mb-4">
                                 <span class="input-group-text">
                                     <i class="fas fa-lock text-muted"></i>
                                 </span>
-                                <input type="password" class="form-control" id="password" name="password" placeholder="Mot de passe" required>
+                                <input type="password" class="form-control" name="password" placeholder="Mot de passe" required>
                             </div>
 
                             <div class="d-grid">
@@ -165,34 +139,16 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                             <p class="mb-0">Pas encore de compte ? 
                                 <a href="inscription.php" class="register-link">
                                     Créer un compte
-                                    <i class="fas fa-arrow-right ms-1"></i>
                                 </a>
                             </p>
                         </div>
+                    </div>
+                    <div class="card-footer p-3 text-center">
+                        <a href="homePage.php" class="btn btn-home">Retour à la page d'accueil</a>
                     </div>
                 </div>
             </div>
         </div>
     </div>
-
-    <!-- Bootstrap JS Bundle with Popper -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-    <script>
-        // Form validation
-        (function () {
-            'use strict'
-            var forms = document.querySelectorAll('.needs-validation')
-            Array.prototype.slice.call(forms)
-                .forEach(function (form) {
-                    form.addEventListener('submit', function (event) {
-                        if (!form.checkValidity()) {
-                            event.preventDefault()
-                            event.stopPropagation()
-                        }
-                        form.classList.add('was-validated')
-                    }, false)
-                })
-        })()
-    </script>
 </body>
 </html>

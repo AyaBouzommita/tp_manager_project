@@ -38,7 +38,6 @@ try {
 }
 
 ?>
-
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -51,49 +50,59 @@ try {
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
         :root {
-            --primary-color: #0072ff;
-            --secondary-color: #00c6ff;
+            --primary-gradient: linear-gradient(135deg, #4CAF50 0%, #2196F3 100%);
+            --secondary-gradient: linear-gradient(135deg, #FF9800 0%, #F44336 100%);
         }
         body {
             background-color: #f8f9fa;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
         .dashboard-header {
-            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+            background: var(--primary-gradient);
+            color: white;
             padding: 2rem 0;
             margin-bottom: 2rem;
-            color: white;
+            border-radius: 0 0 15px 15px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
         }
         .stat-card {
             background: white;
             border-radius: 15px;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
-            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            padding: 1.5rem;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease;
+            height: 100%;
+            margin-bottom: 1rem;
         }
         .stat-card:hover {
             transform: translateY(-5px);
-            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
         }
         .stat-icon {
             font-size: 2.5rem;
-            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+            margin-bottom: 1rem;
+            background: var(--primary-gradient);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
         .menu-card {
-            border: none;
+            background: white;
             border-radius: 15px;
             overflow: hidden;
-            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            border: none;
+            margin-bottom: 2rem;
+            transition: transform 0.3s ease;
         }
         .menu-card:hover {
             transform: translateY(-5px);
-            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
         }
         .menu-icon {
-            font-size: 2rem;
+            font-size: 2.5rem;
             margin-bottom: 1rem;
-            color: var(--primary-color);
+            background: var(--primary-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
         }
         .card-link {
             text-decoration: none;
@@ -105,17 +114,35 @@ try {
         .welcome-name {
             font-weight: 600;
             font-size: 1.8rem;
+            color: white;
         }
         .recent-activity {
             background: white;
             border-radius: 15px;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+            padding: 1.5rem;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        .btn {
+            border-radius: 10px;
+            padding: 0.5rem 1.5rem;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+        .btn-outline-primary {
+            color: #2196F3;
+            border-color: #2196F3;
+        }
+        .btn-outline-primary:hover {
+            background: var(--primary-gradient);
+            border-color: transparent;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.15);
         }
     </style>
 </head>
 <body>
     <?php include '../includes/header.php'; ?>
-
+    
     <div class="dashboard-header">
         <div class="container">
             <div class="row align-items-center">
@@ -252,7 +279,7 @@ try {
                     </thead>
                     <tbody>
                         <tr>
-                            <td><small class="text-muted"><?= date('d/m/Y H:i') ?></small></td>
+                            <td><small class="text-muted"><?= date('d/m/Y H:i', strtotime('+1 hour')); ?></small></td>
                             <td>Connexion</td>
                             <td>Dernière connexion réussie</td>
                         </tr>
@@ -263,7 +290,7 @@ try {
     </div>
 
     <?php include '../includes/footer.php'; ?>
-
+    
     <!-- Bootstrap JS Bundle with Popper -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 </body>

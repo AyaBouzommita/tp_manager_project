@@ -64,7 +64,7 @@ function logout()
 {
     session_unset(); // Supprime toutes les variables de session
     session_destroy(); // Détruit la session
-    header("Location: ../pages/login.php");
+    header("Location: ../pages/homePage.php");
     exit();
 }
 

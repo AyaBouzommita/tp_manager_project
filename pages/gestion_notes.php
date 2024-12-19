@@ -5,27 +5,38 @@ require_once '../includes/db.php';
 // Vérifier si l'utilisateur est connecté
 checkUserSession();
 
-// Récupérer toutes les séances
-$stmt = $conn->prepare("SELECT s.id, s.date, 
-    (SELECT COUNT(*) FROM notes n WHERE n.seance_id = s.id) as nb_notes,
-    (SELECT COUNT(*) FROM etudiants) as total_etudiants,
-    (SELECT AVG(note_totale) FROM notes n WHERE n.seance_id = s.id) as moyenne_seance
-    FROM seances s ORDER BY s.date DESC");
+// Récupérer la liste des groupes
+$result_groupes = $conn->query("SELECT * FROM groupes ORDER BY nom");
+$groupes = $result_groupes->fetch_all(MYSQLI_ASSOC);
+
+// Récupérer les séances
+$selectedGroupe = isset($_POST['groupe_id']) ? $_POST['groupe_id'] : null;
+$selectedSeanceId = isset($_POST['seance_id']) ? $_POST['seance_id'] : null;
+
+// Récupérer les séances en fonction du groupe sélectionné
+$seances_query = "SELECT s.id, s.date, s.groupe_id,
+    (SELECT COUNT(*) FROM notes n 
+     INNER JOIN etudiants e ON n.etudiant_id = e.id 
+     WHERE n.seance_id = s.id AND e.groupe_id = s.groupe_id) as nb_notes,
+    (SELECT COUNT(*) FROM etudiants WHERE groupe_id = s.groupe_id) as total_etudiants,
+    (SELECT AVG(note_totale) FROM notes n 
+     INNER JOIN etudiants e ON n.etudiant_id = e.id 
+     WHERE n.seance_id = s.id AND e.groupe_id = s.groupe_id) as moyenne_seance
+    FROM seances s";
+
+if ($selectedGroupe) {
+    $seances_query .= " WHERE s.groupe_id = ?";
+    $stmt = $conn->prepare($seances_query . " ORDER BY s.date DESC");
+    $stmt->bind_param("i", $selectedGroupe);
+} else {
+    $stmt = $conn->prepare($seances_query . " ORDER BY s.date DESC");
+}
 $stmt->execute();
 $seances = $stmt->get_result();
 
 // Traitement de la soumission du formulaire
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if (isset($_POST['calculer'])) {
-        // Logique pour calculer les notes totales
-        foreach ($_POST['notes'] as $etudiantId => $notes) {
-            $noteTotal = 0;
-            foreach ($notes as $note) {
-                $noteTotal += !empty($note) ? floatval($note) : 0;
-            }
-            $_POST['notes'][$etudiantId]['note_totale'] = $noteTotal;
-        }
-    } elseif (isset($_POST['enregistrer'])) {
+    if (isset($_POST['enregistrer'])) {
         // Enregistrement des notes
         $stmt = $conn->prepare("INSERT INTO notes (etudiant_id, seance_id, travail, compte_rendu, taches_terminees, discipline, note_totale) 
                               VALUES (?, ?, ?, ?, ?, ?, ?) 
@@ -55,30 +66,73 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt->execute();
         }
         setFlashMessage('success', "Les notes ont été enregistrées avec succès.");
-        header("Location: gestion_notes.php");
-        exit();
+        
+        // Conserver les valeurs de filtres après l'enregistrement
+        $selectedSeanceId = $_POST['seance_id'];
+        if (isset($_POST['groupe_id'])) {
+            $selectedGroupe = $_POST['groupe_id'];
+        }
     }
 }
 
 // Récupérer les étudiants et leurs notes pour une séance sélectionnée
-$selectedSeanceId = isset($_POST['seance_id']) ? $_POST['seance_id'] : null;
 $etudiants = [];
 $notes = [];
 
 if ($selectedSeanceId) {
-    // Récupérer tous les étudiants
-    $stmt = $conn->prepare("SELECT id, nom, prenom FROM etudiants ORDER BY nom, prenom");
-    $stmt->execute();
-    $etudiants = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
-
-    // Récupérer les notes existantes pour cette séance
-    $stmt = $conn->prepare("SELECT * FROM notes WHERE seance_id = ?");
-    $stmt->bind_param("i", $selectedSeanceId);
-    $stmt->execute();
-    $notesResult = $stmt->get_result();
+    // Récupérer le tri sélectionné
+    $sortBy = isset($_POST['sort_by']) ? $_POST['sort_by'] : 'nom_asc';
     
-    while ($note = $notesResult->fetch_assoc()) {
-        $notes[$note['etudiant_id']] = $note;
+    // Construire la clause ORDER BY en fonction du tri sélectionné
+    $orderBy = "ORDER BY ";
+    switch ($sortBy) {
+        case 'nom_desc':
+            $orderBy .= "e.nom DESC, e.prenom DESC";
+            break;
+        case 'note_asc':
+            $orderBy .= "COALESCE(n.note_totale, 0) ASC";
+            break;
+        case 'note_desc':
+            $orderBy .= "COALESCE(n.note_totale, 0) DESC";
+            break;
+        case 'nom_asc':
+        default:
+            $orderBy .= "e.nom ASC, e.prenom ASC";
+    }
+
+    // Récupérer les étudiants du groupe sélectionné avec leurs notes
+    if ($selectedGroupe) {
+        $stmt = $conn->prepare(
+            "SELECT e.id, e.nom, e.prenom, 
+                    n.travail, n.compte_rendu, n.taches_terminees, n.discipline, n.note_totale
+             FROM etudiants e 
+             LEFT JOIN notes n ON e.id = n.etudiant_id AND n.seance_id = ?
+             WHERE e.groupe_id = ? " . $orderBy
+        );
+        $stmt->bind_param("ii", $selectedSeanceId, $selectedGroupe);
+    } else {
+        $stmt = $conn->prepare(
+            "SELECT e.id, e.nom, e.prenom, 
+                    n.travail, n.compte_rendu, n.taches_terminees, n.discipline, n.note_totale
+             FROM etudiants e 
+             LEFT JOIN notes n ON e.id = n.etudiant_id AND n.seance_id = ? " . $orderBy
+        );
+        $stmt->bind_param("i", $selectedSeanceId);
+    }
+    $stmt->execute();
+    $result = $stmt->get_result();
+    
+    while ($row = $result->fetch_assoc()) {
+        $etudiants[] = [
+            'id' => $row['id'],
+            'nom' => $row['nom'],
+            'prenom' => $row['prenom'],
+            'travail' => $row['travail'],
+            'compte_rendu' => $row['compte_rendu'],
+            'taches_terminees' => $row['taches_terminees'],
+            'discipline' => $row['discipline'],
+            'note_totale' => $row['note_totale']
+        ];
     }
 }
 ?>
@@ -283,7 +337,20 @@ if ($selectedSeanceId) {
 
         <div class="seance-selector">
             <form method="POST" class="row align-items-end">
-                <div class="col-md-8">
+                <div class="col-md-3">
+                    <label for="groupe_id" class="form-label">
+                        <i class="fas fa-users me-2"></i>Sélectionner un groupe
+                    </label>
+                    <select name="groupe_id" id="groupe_id" class="form-select">
+                        <option value="">Tous les groupes</option>
+                        <?php foreach ($groupes as $groupe): ?>
+                            <option value="<?= $groupe['id'] ?>" <?= ($selectedGroupe == $groupe['id']) ? 'selected' : '' ?>>
+                                <?= htmlspecialchars($groupe['nom']) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="col-md-3">
                     <label for="seance_id" class="form-label">
                         <i class="fas fa-calendar me-2"></i>Sélectionner une séance
                     </label>
@@ -298,9 +365,20 @@ if ($selectedSeanceId) {
                         <?php endwhile; ?>
                     </select>
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-3">
+                    <label for="sort_by" class="form-label">
+                        <i class="fas fa-sort me-2"></i>Trier par
+                    </label>
+                    <select name="sort_by" id="sort_by" class="form-select">
+                        <option value="nom_asc" <?= (!isset($_POST['sort_by']) || $_POST['sort_by'] == 'nom_asc') ? 'selected' : '' ?>>Nom (A-Z)</option>
+                        <option value="nom_desc" <?= (isset($_POST['sort_by']) && $_POST['sort_by'] == 'nom_desc') ? 'selected' : '' ?>>Nom (Z-A)</option>
+                        <option value="note_asc" <?= (isset($_POST['sort_by']) && $_POST['sort_by'] == 'note_asc') ? 'selected' : '' ?>>Note (croissant)</option>
+                        <option value="note_desc" <?= (isset($_POST['sort_by']) && $_POST['sort_by'] == 'note_desc') ? 'selected' : '' ?>>Note (décroissant)</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
                     <button type="submit" class="btn btn-primary w-100">
-                        <i class="fas fa-check me-2"></i>Sélectionner
+                        <i class="fas fa-check me-2"></i>Appliquer
                     </button>
                 </div>
             </form>
@@ -309,6 +387,12 @@ if ($selectedSeanceId) {
         <?php if ($selectedSeanceId && !empty($etudiants)): ?>
             <form method="POST" id="notesForm">
                 <input type="hidden" name="seance_id" value="<?= $selectedSeanceId ?>">
+                <?php if ($selectedGroupe): ?>
+                <input type="hidden" name="groupe_id" value="<?= $selectedGroupe ?>">
+                <?php endif; ?>
+                <?php if (isset($_POST['sort_by'])): ?>
+                <input type="hidden" name="sort_by" value="<?= htmlspecialchars($_POST['sort_by']) ?>">
+                <?php endif; ?>
                 
                 <div class="notes-table">
                     <table class="table table-hover mb-0">
@@ -333,28 +417,28 @@ if ($selectedSeanceId) {
                                         <input type="number" min="0" max="5" step="0.5" 
                                                class="form-control note-input"
                                                name="notes[<?= $etudiant['id'] ?>][travail]"
-                                               value="<?= isset($notes[$etudiant['id']]) ? $notes[$etudiant['id']]['travail'] : '' ?>">
+                                               value="<?= $etudiant['travail'] ?>">
                                     </td>
                                     <td>
                                         <input type="number" min="0" max="5" step="0.5" 
                                                class="form-control note-input"
                                                name="notes[<?= $etudiant['id'] ?>][compte_rendu]"
-                                               value="<?= isset($notes[$etudiant['id']]) ? $notes[$etudiant['id']]['compte_rendu'] : '' ?>">
+                                               value="<?= $etudiant['compte_rendu'] ?>">
                                     </td>
                                     <td>
                                         <input type="number" min="0" max="5" step="0.5" 
                                                class="form-control note-input"
                                                name="notes[<?= $etudiant['id'] ?>][taches_terminees]"
-                                               value="<?= isset($notes[$etudiant['id']]) ? $notes[$etudiant['id']]['taches_terminees'] : '' ?>">
+                                               value="<?= $etudiant['taches_terminees'] ?>">
                                     </td>
                                     <td>
                                         <input type="number" min="0" max="5" step="0.5" 
                                                class="form-control note-input"
                                                name="notes[<?= $etudiant['id'] ?>][discipline]"
-                                               value="<?= isset($notes[$etudiant['id']]) ? $notes[$etudiant['id']]['discipline'] : '' ?>">
+                                               value="<?= $etudiant['discipline'] ?>">
                                     </td>
                                     <td class="note-totale text-center">
-                                        <?= isset($notes[$etudiant['id']]) ? $notes[$etudiant['id']]['note_totale'] : '0' ?>
+                                        <?= $etudiant['note_totale'] ?>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
@@ -363,7 +447,7 @@ if ($selectedSeanceId) {
                 </div>
 
                 <div class="action-buttons">
-                 
+                
                     <button type="submit" name="enregistrer" class="btn btn-primary">
                         <i class="fas fa-save me-2"></i>Enregistrer
                     </button>
@@ -376,44 +460,34 @@ if ($selectedSeanceId) {
             </div>
         <?php endif; ?>
     </div>
-
+    <?php include '../includes/footer.php'; ?>
     <!-- Scripts -->
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.datatables.net/1.11.5/js/jquery.dataTables.min.js"></script>
     <script src="https://cdn.datatables.net/1.11.5/js/dataTables.bootstrap5.min.js"></script>
     <script>
-        // Calcul automatique des notes totales
-        document.querySelectorAll('input[type="number"]').forEach(input => {
-            input.addEventListener('input', function() {
-                const row = this.closest('tr');
-                const inputs = row.querySelectorAll('input[type="number"]');
+        $(document).ready(function() {
+            // Function to calculate total note
+            function calculateTotal(row) {
                 let total = 0;
-                
-                inputs.forEach(input => {
-                    total += !isNaN(input.value) && input.value !== '' ? parseFloat(input.value) : 0;
+                row.find('input[type="number"]').each(function() {
+                    total += parseFloat($(this).val()) || 0;
                 });
-                
-                row.querySelector('.note-totale').textContent = total.toFixed(2);
+                row.find('.note-totale').text(total.toFixed(2));
+            }
+
+            // Calculate totals when input changes
+            $('.note-input').on('input', function() {
+                calculateTotal($(this).closest('tr'));
+            });
+
+            // Handle group selection change
+            $('#groupe_id').change(function() {
+                // Submit the form when group changes
+                $(this).closest('form').submit();
             });
         });
-
-        // Animation des cartes au scroll
-        function revealOnScroll() {
-            const cards = document.querySelectorAll('.stats-card, .notes-table');
-            cards.forEach(card => {
-                const cardTop = card.getBoundingClientRect().top;
-                const triggerBottom = window.innerHeight * 0.8;
-                
-                if (cardTop < triggerBottom) {
-                    card.style.opacity = '1';
-                    card.style.transform = 'translateY(0)';
-                }
-            });
-        }
-
-        window.addEventListener('scroll', revealOnScroll);
-        revealOnScroll();
     </script>
 </body>
 </html>

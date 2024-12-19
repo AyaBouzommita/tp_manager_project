@@ -15,7 +15,6 @@ $searchTerm = isset($_GET['search']) ? trim($_GET['search']) : '';
 // Récupérer les groupes (filtrés ou tous)
 $groupes = !empty($searchTerm) ? searchGroupes($searchTerm) : getAllGroupes();
 ?>
-
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -24,30 +23,155 @@ $groupes = !empty($searchTerm) ? searchGroupes($searchTerm) : getAllGroupes();
     <title>Gestion des Groupes</title>
     <?php include '../includes/header.php'; ?>
     <style>
+        :root {
+            --primary-gradient: linear-gradient(135deg, #4CAF50 0%, #2196F3 100%);
+            --secondary-gradient: linear-gradient(135deg, #FF9800 0%, #F44336 100%);
+        }
+        
+        .groups-header {
+            background: var(--primary-gradient);
+            color: white;
+            padding: 2rem 0;
+            margin-bottom: 2rem;
+            border-radius: 0 0 15px 15px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+
         .search-container {
             margin-bottom: 2rem;
         }
+
         .search-container .input-group {
             max-width: 500px;
         }
-        .card {
-            transition: transform 0.2s;
+
+        .search-container .form-control {
+            border-radius: 10px 0 0 10px;
+            border: 1px solid #e0e0e0;
+            padding: 0.75rem 1rem;
+            box-shadow: none;
         }
+
+        .search-container .btn {
+            border-radius: 0 10px 10px 0;
+            padding: 0.75rem 1.5rem;
+        }
+
+        .card {
+            background: white;
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            border: none;
+            margin-bottom: 2rem;
+            transition: transform 0.3s ease;
+        }
+
         .card:hover {
             transform: translateY(-5px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+        }
+
+        .card-header {
+            background: var(--primary-gradient);
+            color: white;
+            border: none;
+            padding: 1rem 1.5rem;
+        }
+
+        .card-header h5 {
+            margin: 0;
+            font-size: 1.25rem;
+        }
+
+        .card-body {
+            padding: 1.5rem;
+        }
+
+        .btn {
+            border-radius: 10px;
+            padding: 0.5rem 1.5rem;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .btn-outline-primary {
+            color: #2196F3;
+            border-color: #2196F3;
+        }
+
+        .btn-outline-primary:hover {
+            background: var(--primary-gradient);
+            border-color: transparent;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+            color: white;
+        }
+
+        .btn-outline-danger {
+            color: #F44336;
+            border-color: #F44336;
+        }
+
+        .btn-outline-danger:hover {
+            background: var(--secondary-gradient);
+            border-color: transparent;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+            color: white;
+        }
+
+        .modal-content {
+            border-radius: 15px;
+            border: none;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+
+        .modal-header {
+            border-radius: 15px 15px 0 0;
+            border: none;
+        }
+
+        .modal-header.bg-primary {
+            background: var(--primary-gradient) !important;
+        }
+
+        .modal-header.bg-danger {
+            background: var(--secondary-gradient) !important;
+        }
+
+        .form-control {
+            border-radius: 10px;
+            border: 1px solid #e0e0e0;
+            padding: 0.5rem 1rem;
+            transition: all 0.3s ease;
+        }
+
+        .form-control:focus {
+            box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.1);
+            border-color: #2196F3;
+        }
+
+        .alert {
+            border-radius: 10px;
+            border: none;
             box-shadow: 0 4px 15px rgba(0,0,0,0.1);
         }
     </style>
 </head>
-<body class="d-flex flex-column min-vh-100">
-    <div class="container mt-5 pt-4">
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <h1>Gestion des Groupes</h1>
-            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addGroupeModal">
-                <i class="fas fa-plus"></i> Nouveau Groupe
-            </button>
+<body class="bg-light">
+    <div class="groups-header">
+        <div class="container">
+            <div class="d-flex justify-content-between align-items-center">
+                <h1 class="mb-0">Gestion des Groupes</h1>
+                <button type="button" class="btn btn-light" data-bs-toggle="modal" data-bs-target="#addGroupeModal">
+                    <i class="fas fa-plus"></i> Nouveau Groupe
+                </button>
+            </div>
         </div>
+    </div>
 
+    <div class="container">
         <!-- Barre de recherche -->
         <div class="search-container">
             <form action="" method="GET" class="mb-4">
@@ -196,17 +320,11 @@ $groupes = !empty($searchTerm) ? searchGroupes($searchTerm) : getAllGroupes();
     <?php endforeach; ?>
 
     <?php include '../includes/footer.php'; ?>
-    <script>
-        // Auto-hide alerts after 5 seconds
-        document.addEventListener('DOMContentLoaded', function() {
-            setTimeout(function() {
-                var alerts = document.querySelectorAll('.alert');
-                alerts.forEach(function(alert) {
-                    var bsAlert = new bootstrap.Alert(alert);
-                    bsAlert.close();
-                });
-            }, 5000);
-        });
-    </script>
+    <?php
+    // Si un message de succès ou d'erreur existe, on le supprime après 5 secondes
+    if (isset($_SESSION['success']) || isset($_SESSION['error'])) {
+        header("Refresh:5; url=" . $_SERVER['PHP_SELF']);
+    }
+    ?>
 </body>
 </html>
