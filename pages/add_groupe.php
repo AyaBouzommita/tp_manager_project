@@ -2,7 +2,7 @@
 session_start();
 require_once '../includes/db.php';
 require_once '../includes/groupe_operations.php';
-
+//test2
 if (!isset($_SESSION['prof_id'])) {
     header('Location: login.php');
     exit();
